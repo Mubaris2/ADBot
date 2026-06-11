@@ -51,7 +51,7 @@ async def download_image(media_url: str, filename: str) -> str:
     save_path = os.path.join(TEMP_DIR, filename)
 
     auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-    async with httpx.AsyncClient(auth=auth) as http:
+    async with httpx.AsyncClient(auth=auth, follow_redirects=True) as http:
         response = await http.get(media_url)
         response.raise_for_status()
 

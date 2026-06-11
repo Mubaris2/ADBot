@@ -3,7 +3,8 @@ uvicorn
 python-dotenv
 httpx
 twilio
-rembg
+rembg[cpu]
 Pillow
 apscheduler
 aiofiles
+python-multipart

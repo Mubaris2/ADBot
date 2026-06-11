@@ -11,7 +11,7 @@ async def get_balance() -> float:
     """Fetch current pollen wallet balance from Pollinations API."""
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"{POLLINATIONS_API_URL}/wallet/balance",
+            f"{POLLINATIONS_API_URL}/account/balance",
             headers={"Authorization": f"Bearer {POLLINATIONS_API_KEY}"},
         )
         response.raise_for_status()
