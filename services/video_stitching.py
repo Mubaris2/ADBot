@@ -10,6 +10,8 @@ from config import (
     LOGO_SCALE,
     OUTPUT_RESOLUTION,
     TEMP_DIR,
+    CLOUDINARY_UPLOAD_URL,
+    CLOUDINARY_UPLOAD_PRESET,
 )
 
 
@@ -133,13 +135,9 @@ def finalize_video(job_id: str) -> str:
 
 
 async def upload_to_cloudinary(video_path: str) -> str:
-    """
-    Upload final video to Cloudinary and return public URL.
-    Twilio needs a public URL to send media on WhatsApp.
-    Set CLOUDINARY_UPLOAD_URL and CLOUDINARY_UPLOAD_PRESET in .env.
-    """
-    upload_url    = os.getenv("CLOUDINARY_UPLOAD_URL")
-    upload_preset = os.getenv("CLOUDINARY_UPLOAD_PRESET")
+    """Upload final video to Cloudinary and return public URL."""
+    upload_url    = CLOUDINARY_UPLOAD_URL
+    upload_preset = CLOUDINARY_UPLOAD_PRESET
 
     async with aiofiles.open(video_path, "rb") as f:
         video_data = await f.read()
@@ -149,31 +147,6 @@ async def upload_to_cloudinary(video_path: str) -> str:
             upload_url,
             data={"upload_preset": upload_preset},
             files={"file": (os.path.basename(video_path), video_data, "video/mp4")},
-        )
-        if response.status_code >= 400:
-            print("Cloudinary error response:", response.text)
-        response.raise_for_status()
-        return response.json()["secure_url"]
-
-
-async def upload_image_to_cloudinary(image_path: str) -> str:
-    """
-    Upload a prepared jewellery image to Cloudinary and return public URL.
-    LTX-2 needs a public image URL as input.
-    Reuses CLOUDINARY_UPLOAD_URL but swaps /video/ -> /image/.
-    """
-    video_upload_url = os.getenv("CLOUDINARY_UPLOAD_URL")
-    upload_preset     = os.getenv("CLOUDINARY_UPLOAD_PRESET")
-    image_upload_url  = video_upload_url.replace("/video/upload", "/image/upload")
-
-    async with aiofiles.open(image_path, "rb") as f:
-        image_data = await f.read()
-
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
-            image_upload_url,
-            data={"upload_preset": upload_preset},
-            files={"file": (os.path.basename(image_path), image_data, "image/png")},
         )
         if response.status_code >= 400:
             print("Cloudinary error response:", response.text)

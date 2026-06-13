@@ -1,20 +1,26 @@
-import uuid
 import os
+import uuid
 from fastapi import APIRouter, Request
-from services.whatsapp import parse_incoming, download_image, send_message
-from services.wallet import get_balance, is_balance_sufficient, format_wait_message
-from services.background_removal import remove_background, prepare_image_for_video
-from services.video_generation import generate_all_videos
-from services.video_stitching import finalize_video, upload_to_cloudinary, upload_image_to_cloudinary
-from models.job import AdJob, JobStatus
-from jobs.scheduler import save_pending_job, run_pipeline
-from prompts.scenes import get_unique_scenes
-from config import VIDEO_DURATION_SEC, POLLEN_PER_SECOND
+from services.whatsapp import parse_incoming, download_image, send_message, send_video_url
+from services.prompt_generator import generate_image_prompts
+from services.ken_burns import create_ornament_clip
+from services.video_stitching import finalize_video, upload_to_cloudinary
 
 router = APIRouter()
 
-# In-memory store per sender: holds uploaded image paths until "make ad" trigger
-pending_images: dict[str, list[str]] = {}
+# In-memory per-sender session state
+# state: "idle" | "awaiting_images"
+sessions: dict[str, dict] = {}
+
+
+def _get_session(sender: str) -> dict:
+    if sender not in sessions:
+        sessions[sender] = {"state": "idle", "images": []}
+    return sessions[sender]
+
+
+def _reset_session(sender: str) -> None:
+    sessions[sender] = {"state": "idle", "images": []}
 
 
 @router.post("/webhook")
@@ -22,73 +28,98 @@ async def whatsapp_webhook(request: Request):
     form = await request.form()
     data = parse_incoming(dict(form))
 
-    sender = data["sender"]
+    sender  = data["sender"]
+    session = _get_session(sender)
 
-    # ---------- Image upload ----------
+    # ---------- Image upload (only matters in awaiting_images state) ----------
     if data["has_images"]:
-        if sender not in pending_images:
-            pending_images[sender] = []
+        if session["state"] != "awaiting_images":
+            send_message(
+                sender,
+                "Please send the jewellery type first (e.g. 'gold necklace') "
+                "so I can give you a prompt before sending images.",
+            )
+            return {"status": "ignored_image"}
 
-        for i, url in enumerate(data["media_urls"]):
-            count    = len(pending_images[sender])
-            filename = f"{sender.replace(':', '_').replace('+', '')}_{count + i}.jpg"
+        for url in data["media_urls"]:
+            filename = f"{sender.replace(':', '_').replace('+', '')}_{uuid.uuid4().hex[:8]}.png"
             path     = await download_image(url, filename)
-            pending_images[sender].append(path)
+            session["images"].append(path)
 
-        count = len(pending_images[sender])
+        count = len(session["images"])
         send_message(
             sender,
-            f"Got it! {count} photo{'s' if count > 1 else ''} received so far.\n"
-            f"Send more photos or type *make ad* when ready.",
+            f"Got it! {count} image{'s' if count > 1 else ''} received.\n"
+            f"Send more, or type *make ad* when ready.",
         )
         return {"status": "images_received"}
 
     # ---------- Cancel ----------
     if data["is_cancel"]:
-        pending_images.pop(sender, None)
-        send_message(sender, "Cancelled. Send photos again whenever you are ready.")
+        _reset_session(sender)
+        send_message(sender, "Cancelled. Send a jewellery type whenever you're ready to start again.")
         return {"status": "cancelled"}
 
-    # ---------- Trigger ----------
+    # ---------- "make ad" trigger ----------
     if data["is_trigger"]:
-        images = pending_images.get(sender, [])
-
-        if not images:
-            send_message(sender, "No photos found. Please send jewellery photos first.")
+        if session["state"] != "awaiting_images" or not session["images"]:
+            send_message(
+                sender,
+                "No images to work with yet. Send a jewellery type first, "
+                "then send the generated images.",
+            )
             return {"status": "no_images"}
 
-        # Build job
-        job = AdJob(
-            job_id=str(uuid.uuid4())[:8],
-            sender=sender,
-            image_paths=images,
-        )
-        job.calculate_pollen(VIDEO_DURATION_SEC, POLLEN_PER_SECOND)
+        send_message(sender, "Creating your ad... this may take a minute!")
 
-        # Check wallet
+        print(f"[DEBUG] session images for {sender}: {session['images']}")
+        for p in session["images"]:
+            print(f"[DEBUG]   {p} exists={os.path.exists(p)} size={os.path.getsize(p) if os.path.exists(p) else 'N/A'}")
+
         try:
-            balance = await get_balance()
-        except Exception:
-            send_message(sender, "Could not reach Pollinations wallet. Please try again in a moment.")
-            return {"status": "wallet_error"}
+            create_ornament_clip(session["images"], ornament_index=0)
+            final_path = finalize_video(job_id="latest")
+            public_url = await upload_to_cloudinary(final_path)
 
-        if is_balance_sufficient(balance, job.pollen_required):
-            # Enough balance: run immediately
-            pending_images.pop(sender, None)
-            send_message(sender, f"Creating your ad for {len(images)} jewellery piece{'s' if len(images) > 1 else ''}... Sit tight!")
-            await run_pipeline(job)
-        else:
-            # Low balance: queue and notify
-            save_pending_job(job)
-            pending_images.pop(sender, None)
-            wait_msg = format_wait_message(balance, job.pollen_required, len(images))
-            send_message(sender, wait_msg)
+            send_video_url(
+                sender,
+                public_url,
+                caption="Your jewellery ad is ready! Save and post on Instagram.",
+            )
+        except Exception as e:
+            send_message(sender, f"Something went wrong while creating your ad.\nError: {str(e)}")
 
-        return {"status": "triggered"}
+        _reset_session(sender)
+        return {"status": "done"}
 
-    # ---------- Unknown message ----------
+    # ---------- Jewellery type (idle state, plain text) ----------
+    if session["state"] == "idle" and data["body"]:
+        jewellery_type = data["body"]
+
+        try:
+            prompts = await generate_image_prompts(jewellery_type)
+        except Exception as e:
+            send_message(sender, f"Could not generate a prompt right now. Please try again.\nError: {str(e)}")
+            return {"status": "prompt_error"}
+
+        session["state"]  = "awaiting_images"
+        session["images"] = []
+
+        prompts_text = "\n\n".join(
+            f"Image {i + 1}:\n{p}" for i, p in enumerate(prompts)
+        )
+
+        send_message(
+            sender,
+            f"Here are your prompts:\n\n{prompts_text}\n\n"
+            f"Generate each image using its prompt, then send all images back here.\n"
+            f"Type *make ad* once you've sent all images.",
+        )
+        return {"status": "prompt_sent"}
+
+    # ---------- Fallback ----------
     send_message(
         sender,
-        "Send me jewellery photos and type *make ad* when you are ready to create your Instagram ad!",
+        "Send me the jewellery type (e.g. 'gold necklace') to get started!",
     )
     return {"status": "unknown"}
