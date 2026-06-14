@@ -24,10 +24,13 @@ SYSTEM_INSTRUCTION = (
     "Line 1: a front-facing product shot of the jewellery in the scene.\n"
     "Line 2: a close-up detail shot of the jewellery in the scene.\n"
     "Line 3: a styled/worn shot of the jewellery in the scene.\n"
-    "STRICT OUTPUT RULES: respond with EXACTLY 3 lines, one prompt per line, plain text only. "
+    "Line 4: a short background music style description (genre, instruments, mood, tempo) "
+    "that matches the mood of the scene from lines 1-3, suitable for an instrumental "
+    "Instagram ad track, under 20 words.\n"
+    "STRICT OUTPUT RULES: respond with EXACTLY 4 lines, one item per line, plain text only. "
     "Do NOT use markdown, asterisks, bullet points, numbering, headings, or labels like "
     "'Line 1:'. Do NOT add any preamble, explanation, or quotes. "
-    "Each line should be a single image generation prompt, under 60 words."
+    "Each of lines 1-3 should be a single image generation prompt, under 60 words."
 )
 
 
@@ -48,16 +51,20 @@ def _generate_sync(jewellery_type: str) -> list[str]:
     return lines
 
 
-async def generate_image_prompts(jewellery_type: str) -> list[str]:
+async def generate_image_prompts(jewellery_type: str) -> dict:
     """
     Call Gemini to generate 3 separate single-image prompts for the given
-    jewellery type, all sharing one randomly chosen scene.
-    Returns a list of 3 prompt strings (front, close-up, styled).
+    jewellery type, all sharing one randomly chosen scene, plus a matching
+    music theme description.
+    Returns {"image_prompts": [3 strings], "music_theme": str}
     """
     lines = await asyncio.to_thread(_generate_sync, jewellery_type)
 
-    if len(lines) < 3:
-        raise RuntimeError(f"Expected 3 prompt lines, got {len(lines)}: {lines}")
+    if len(lines) < 4:
+        raise RuntimeError(f"Expected 4 lines, got {len(lines)}: {lines}")
 
-    return lines[:3]
+    return {
+        "image_prompts": lines[:3],
+        "music_theme": lines[3],
+    }
 

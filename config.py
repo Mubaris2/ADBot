@@ -8,6 +8,10 @@ TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")  # e.g. whatsapp:+14155238886
 
+# Pollinations (for background music)
+POLLINATIONS_API_URL = "https://gen.pollinations.ai"
+POLLINATIONS_API_KEY = os.getenv("POLLINATIONS_API_KEY")
+
 # Gemini (for image prompt generation)
 GEMINI_MODEL   = "gemini-3.5-flash"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
