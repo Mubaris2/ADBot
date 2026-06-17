@@ -22,10 +22,10 @@ CLOUDINARY_UPLOAD_PRESET = os.getenv("CLOUDINARY_UPLOAD_PRESET")
 
 # Video
 SHOP_LOGO_PATH         = "assets/shop_logo.png"
-SHOP_DETAILS_PATH      = "assets/shop_details.jpg"
-SHOP_DETAILS_DURATION  = 3       # Seconds for final shop card
-LOGO_POSITION          = "10:10" # top-left corner (x:y)
-LOGO_SCALE             = "80:80" # width:height in pixels
+SHOP_DETAILS_PATH      = "assets/shop_details.png"
+SHOP_DETAILS_DURATION  = 4           # Seconds for final shop card
+LOGO_POSITION          = "610:1170"  # bottom-right corner (x:y)
+LOGO_SCALE             = "100:100"     # width:height in pixels
 OUTPUT_RESOLUTION      = "720:1280"  # 9:16 vertical for Instagram
 
 # Temp
