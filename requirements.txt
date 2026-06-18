@@ -6,3 +6,4 @@ twilio
 aiofiles
 python-multipart
 google-genai
+Pillow
