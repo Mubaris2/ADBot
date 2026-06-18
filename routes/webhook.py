@@ -65,6 +65,7 @@ async def _process_make_ad(sender: str, session: dict) -> None:
         cleanup_temp(keep=["shop_details.jpg"])
 
     except Exception as e:
+        print(f"[ERROR] _process_make_ad failed for {sender}:\n{str(e)}")
         send_message(sender, f"Something went wrong while creating your ad.\nError: {str(e)}")
 
     session["images"] = []
@@ -74,6 +75,7 @@ async def _process_jewellery_type(sender: str, session: dict, jewellery_type: st
     try:
         result = await generate_image_prompts(jewellery_type)
     except Exception as e:
+        print(f"[ERROR] _process_jewellery_type failed for {sender}:\n{str(e)}")
         send_message(sender, f"Could not generate a prompt right now. Please try again.\nError: {str(e)}")
         return
 
