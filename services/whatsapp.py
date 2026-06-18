@@ -18,6 +18,10 @@ CANCEL_KEYWORD  = "cancel"
 
 def send_message(to: str, body: str) -> None:
     """Send a plain text WhatsApp message to dad."""
+    # WhatsApp/Twilio caps messages at 1600 characters
+    if len(body) > 1600:
+        body = body[:1550] + "\n...(truncated)"
+
     client.messages.create(
         from_=TWILIO_WHATSAPP_NUMBER,
         to=to,

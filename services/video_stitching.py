@@ -17,8 +17,14 @@ from config import (
 
 def _run_ffmpeg(args: list) -> None:
     """Run an ffmpeg command, raise on failure."""
-    cmd = ["ffmpeg", "-y"] + args
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    cmd = ["ffmpeg", "-y", "-nostdin"] + args
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        timeout=120,
+    )
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg error:\n{result.stderr}")
 
@@ -47,12 +53,22 @@ def shop_details_to_clip() -> str:
     """Convert static shop details image into a short video clip."""
     output = os.path.join(TEMP_DIR, "shop_details_clip.mp4")
     w, h = OUTPUT_RESOLUTION.split(":")
+    fps = 25
+    total_frames = int(SHOP_DETAILS_DURATION * fps)
+
+    if not os.path.exists(SHOP_DETAILS_PATH):
+        raise FileNotFoundError(
+            f"Shop details image not found at {SHOP_DETAILS_PATH}. "
+            f"Make sure the file exists in assets/ with the exact name/extension configured."
+        )
+
     _run_ffmpeg([
         "-loop", "1",
         "-i", SHOP_DETAILS_PATH,
-        "-t", str(SHOP_DETAILS_DURATION),
+        "-frames:v", str(total_frames),
         "-vf", f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
-               f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2",
+               f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+        "-r", str(fps),
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
         "-an",

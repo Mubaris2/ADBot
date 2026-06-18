@@ -16,8 +16,14 @@ KEN_BURNS_PRESETS = ["zoom_in", "zoom_out", "pan_left", "pan_right", "diagonal"]
 
 
 def _run_ffmpeg(args: list) -> None:
-    cmd = ["ffmpeg", "-y"] + args
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    cmd = ["ffmpeg", "-y", "-nostdin"] + args
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        timeout=120,
+    )
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg error:\n{result.stderr}")
 
