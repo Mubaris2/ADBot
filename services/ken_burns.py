@@ -85,6 +85,7 @@ def create_ken_burns_clip(image_path: str, index: int, preset: str = None) -> st
     vf = _zoompan_filter(preset, w, h, total_frames)
 
     _run_ffmpeg([
+        "-f", "image2",
         "-loop", "1",
         "-i", image_path,
         "-vf", vf,

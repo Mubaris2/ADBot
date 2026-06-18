@@ -63,6 +63,7 @@ def shop_details_to_clip() -> str:
         )
 
     _run_ffmpeg([
+        "-f", "image2",
         "-loop", "1",
         "-i", SHOP_DETAILS_PATH,
         "-frames:v", str(total_frames),
