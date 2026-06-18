@@ -25,7 +25,9 @@ def _ensure_reasonable_size(image_path: str, max_dimension: int = 1600) -> str:
     original path unchanged.
     """
     with Image.open(image_path) as img:
+        original_size = img.size
         if max(img.size) <= max_dimension:
+            print(f"[INFO] {image_path}: size {original_size}, no resize needed")
             return image_path
 
         img.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
@@ -34,6 +36,7 @@ def _ensure_reasonable_size(image_path: str, max_dimension: int = 1600) -> str:
         )
         os.makedirs(TEMP_DIR, exist_ok=True)
         img.convert("RGBA").save(resized_path, "PNG")
+        print(f"[INFO] {image_path}: resized {original_size} -> {img.size}")
         return resized_path
 
 
@@ -63,9 +66,11 @@ def normalize_clip(clip_path: str, index: int) -> str:
         "-vf", f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
                f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2",
         "-c:v", "libx264",
-        "-r", "30",
+        "-preset", "veryfast",
+        "-threads", "2",
+        "-r", "24",
         "-pix_fmt", "yuv420p",
-        "-an",                  # no audio from LTX-2 clips (add music later)
+        "-an",
         output,
     ])
     return output
@@ -75,7 +80,7 @@ def shop_details_to_clip() -> str:
     """Convert static shop details image into a short video clip."""
     output = os.path.join(TEMP_DIR, "shop_details_clip.mp4")
     w, h = OUTPUT_RESOLUTION.split(":")
-    fps = 25
+    fps = 24
     total_frames = int(SHOP_DETAILS_DURATION * fps)
 
     if not os.path.exists(SHOP_DETAILS_PATH):
@@ -95,6 +100,8 @@ def shop_details_to_clip() -> str:
                f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
         "-r", str(fps),
         "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-threads", "2",
         "-pix_fmt", "yuv420p",
         "-an",
         output,
@@ -132,6 +139,8 @@ def overlay_logo(video_path: str) -> str:
         "-filter_complex",
         f"[1:v]scale={w}:{h}[logo];[0:v][logo]overlay={x}:{y}",
         "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-threads", "2",
         "-pix_fmt", "yuv420p",
         "-an",
         output,
