@@ -1,6 +1,7 @@
 import subprocess
 import os
 import random
+from PIL import Image
 from config import TEMP_DIR, OUTPUT_RESOLUTION
 
 # Frame rate for all clips
@@ -13,6 +14,25 @@ IMAGE_DURATION = 2.7
 CROSSFADE_DURATION = 0.5
 
 KEN_BURNS_PRESETS = ["zoom_in", "zoom_out", "pan_left", "pan_right", "diagonal"]
+
+
+def _ensure_reasonable_size(image_path: str, max_dimension: int = 1600) -> str:
+    """
+    Downscale an image if it's larger than necessary before handing it to
+    FFmpeg, to avoid memory spikes decoding very large source photos
+    (e.g. modern phone camera images can be 3000px+).
+    """
+    with Image.open(image_path) as img:
+        if max(img.size) <= max_dimension:
+            return image_path
+
+        img.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
+        resized_path = os.path.join(
+            TEMP_DIR, f"resized_{os.path.basename(image_path)}"
+        )
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        img.convert("RGB").save(resized_path, "PNG")
+        return resized_path
 
 
 def _run_ffmpeg(args: list) -> None:
@@ -84,10 +104,12 @@ def create_ken_burns_clip(image_path: str, index: int, preset: str = None) -> st
     output = os.path.join(TEMP_DIR, f"kb_{index}.mp4")
     vf = _zoompan_filter(preset, w, h, total_frames)
 
+    source_path = _ensure_reasonable_size(image_path)
+
     _run_ffmpeg([
         "-f", "image2",
         "-loop", "1",
-        "-i", image_path,
+        "-i", source_path,
         "-vf", vf,
         "-t", str(IMAGE_DURATION),
         "-c:v", "libx264",

@@ -2,6 +2,7 @@ import subprocess
 import os
 import aiofiles
 import httpx
+from PIL import Image
 from config import (
     SHOP_LOGO_PATH,
     SHOP_DETAILS_PATH,
@@ -13,6 +14,27 @@ from config import (
     CLOUDINARY_UPLOAD_URL,
     CLOUDINARY_UPLOAD_PRESET,
 )
+
+
+def _ensure_reasonable_size(image_path: str, max_dimension: int = 1600) -> str:
+    """
+    Downscale an image if it's larger than necessary before handing it to
+    FFmpeg. Large source images (e.g. a 1536x2752 shop details graphic)
+    can spike memory usage during decode on memory-constrained hosts.
+    Returns path to a resized copy if resizing was needed, else the
+    original path unchanged.
+    """
+    with Image.open(image_path) as img:
+        if max(img.size) <= max_dimension:
+            return image_path
+
+        img.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
+        resized_path = os.path.join(
+            TEMP_DIR, f"resized_{os.path.basename(image_path)}"
+        )
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        img.convert("RGBA").save(resized_path, "PNG")
+        return resized_path
 
 
 def _run_ffmpeg(args: list) -> None:
@@ -62,10 +84,12 @@ def shop_details_to_clip() -> str:
             f"Make sure the file exists in assets/ with the exact name/extension configured."
         )
 
+    source_path = _ensure_reasonable_size(SHOP_DETAILS_PATH)
+
     _run_ffmpeg([
         "-f", "image2",
         "-loop", "1",
-        "-i", SHOP_DETAILS_PATH,
+        "-i", source_path,
         "-frames:v", str(total_frames),
         "-vf", f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
                f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
