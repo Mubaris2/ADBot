@@ -8,7 +8,7 @@ from config import TEMP_DIR, OUTPUT_RESOLUTION
 FPS = 24
 
 # Per-image duration before crossfade overlap
-IMAGE_DURATION = 2.7
+IMAGE_DURATION = 2.6
 
 # Crossfade duration between images
 CROSSFADE_DURATION = 0.5
@@ -116,8 +116,8 @@ def create_ken_burns_clip(image_path: str, index: int, preset: str = None) -> st
         "-vf", vf,
         "-t", str(IMAGE_DURATION),
         "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-threads", "2",
+        "-preset", "ultrafast",
+        "-threads", "1",  # zoompan is single-threaded anyway, no benefit from 2
         "-pix_fmt", "yuv420p",
         "-an",
         output,

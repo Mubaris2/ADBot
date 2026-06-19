@@ -51,13 +51,23 @@ def send_video_url(to: str, media_url: str, caption: str = "") -> None:
 
 async def download_image(media_url: str, filename: str) -> str:
     """Download an image from Twilio media URL and save to temp dir."""
+    import asyncio
     os.makedirs(TEMP_DIR, exist_ok=True)
     save_path = os.path.join(TEMP_DIR, filename)
 
     auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-    async with httpx.AsyncClient(auth=auth, follow_redirects=True) as http:
-        response = await http.get(media_url)
-        response.raise_for_status()
+    
+    MAX_ATTEMPTS = 5
+    for attempt in range(MAX_ATTEMPTS):
+        async with httpx.AsyncClient(auth=auth, follow_redirects=True) as http:
+            response = await http.get(media_url)
+            if response.status_code == 404 and attempt < MAX_ATTEMPTS - 1:
+                wait = 2 ** attempt  # 1s, 2s, 4s, 8s
+                print(f"[WARN] Twilio media 404 on attempt {attempt + 1}, retrying in {wait}s...")
+                await asyncio.sleep(wait)
+                continue
+            response.raise_for_status()
+            break
 
     async with aiofiles.open(save_path, "wb") as f:
         await f.write(response.content)
