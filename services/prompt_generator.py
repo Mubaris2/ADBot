@@ -1,8 +1,14 @@
 import asyncio
+import time
 from google import genai
+from google.genai import errors as genai_errors
 from config import GEMINI_MODEL, GEMINI_API_KEY
 
 _client = None
+
+# Retry config for transient errors (503 overloaded, 429 rate limited, etc)
+MAX_RETRIES = 4
+BASE_DELAY_SECONDS = 2
 
 
 def _get_client() -> genai.Client:
@@ -35,20 +41,29 @@ SYSTEM_INSTRUCTION = (
 
 
 def _generate_sync(jewellery_type: str) -> list[str]:
-    response = _get_client().models.generate_content(
-        model=GEMINI_MODEL,
-        contents=f"Jewellery type: {jewellery_type}",
-        config={
-            "system_instruction": SYSTEM_INSTRUCTION,
-            "temperature": 1.0,
-            "max_output_tokens": 1024,
-            "thinking_config": {"thinking_budget": 0},
-        },
-    )
-    text = response.text.strip()
-
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    return lines
+    import time
+    last_error = None
+    for attempt in range(3):
+        try:
+            response = _get_client().models.generate_content(
+                model=GEMINI_MODEL,
+                contents=f"Jewellery type: {jewellery_type}",
+                config={
+                    "system_instruction": SYSTEM_INSTRUCTION,
+                    "temperature": 1.0,
+                    "max_output_tokens": 1024,
+                    "thinking_config": {"thinking_budget": 0},
+                },
+            )
+            text = response.text.strip()
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            return lines
+        except Exception as e:
+            last_error = e
+            wait = 2 ** attempt  # 1s, 2s, 4s
+            print(f"[WARN] Gemini attempt {attempt + 1} failed: {e}. Retrying in {wait}s...")
+            time.sleep(wait)
+    raise last_error
 
 
 async def generate_image_prompts(jewellery_type: str) -> dict:

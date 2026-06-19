@@ -13,7 +13,7 @@ POLLINATIONS_API_URL = "https://gen.pollinations.ai"
 POLLINATIONS_API_KEY = os.getenv("POLLINATIONS_API_KEY")
 
 # Gemini (for image prompt generation)
-GEMINI_MODEL   = "gemini-3.5-flash"
+GEMINI_MODEL   = "gemini-2.0-flash"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Cloudinary
