@@ -6,4 +6,5 @@ aiofiles
 google-genai
 pillow
 python-dotenv
+python-multipart
 modal
