@@ -17,16 +17,19 @@ GEMINI_MODEL   = "gemini-3.1-flash-lite"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Cloudinary
-CLOUDINARY_UPLOAD_URL    = os.getenv("CLOUDINARY_UPLOAD_URL")
+CLOUDINARY_BASE_URL      = os.getenv("CLOUDINARY_BASE_URL")   # https://api.cloudinary.com/v1_1/<cloud_name>
 CLOUDINARY_UPLOAD_PRESET = os.getenv("CLOUDINARY_UPLOAD_PRESET")
 
+# Modal
+MODAL_ENDPOINT_URL = os.getenv("MODAL_ENDPOINT_URL")  # set after modal deploy
+
 # Video
-SHOP_LOGO_PATH         = "assets/shop_logo.png"
-SHOP_DETAILS_PATH      = "assets/shop_details.png"
-SHOP_DETAILS_DURATION  = 4           # Seconds for final shop card
-LOGO_POSITION          = "610:1170"  # bottom-right corner (x:y)
-LOGO_SCALE             = "100:100"     # width:height in pixels
-OUTPUT_RESOLUTION      = "720:1280"  # 9:16 vertical for Instagram
+SHOP_LOGO_PATH        = "assets/shop_logo.png"
+SHOP_DETAILS_PATH     = "assets/shop_details.png"
+SHOP_DETAILS_DURATION = 4            # seconds for final shop card
+LOGO_POSITION         = "610:1170"   # bottom-right corner (x:y)
+LOGO_SCALE            = "100:100"    # width:height in pixels
+OUTPUT_RESOLUTION     = "720:1280"   # 9:16 vertical for Instagram
 
 # Temp
 TEMP_DIR = "temp"

@@ -1,30 +1,33 @@
-import os
 import uuid
 from fastapi import APIRouter, Request, BackgroundTasks
 from fastapi.responses import Response
-from services.whatsapp import parse_incoming, download_image, send_message, send_video_url
+from services.whatsapp import parse_incoming, download_and_upload_image, send_message, send_video_url
 from services.prompt_generator import generate_image_prompts
-from services.ken_burns import create_ornament_clip
-from services.video_stitching import finalize_video, upload_to_cloudinary, cleanup_temp
-from services.music_generation import generate_music
+from services.video_stitching import process_and_upload_video, cleanup_temp
 
 router = APIRouter()
 
-# In-memory per-sender session: collected images + last music theme
+# In-memory per-sender session: Cloudinary image URLs + last music theme
 sessions: dict[str, dict] = {}
 
 
 def _get_session(sender: str) -> dict:
-    return sessions.setdefault(sender, {"images": [], "music_theme": None})
+    return sessions.setdefault(sender, {"image_urls": []})
 
 
 async def _process_images(sender: str, session: dict, media_urls: list) -> None:
+    """Download images from Twilio, upload to Cloudinary, store URLs in session."""
     for url in media_urls:
         filename = f"{sender.replace(':', '_').replace('+', '')}_{uuid.uuid4().hex[:8]}.png"
-        path     = await download_image(url, filename)
-        session["images"].append(path)
+        try:
+            cloudinary_url = await download_and_upload_image(url, filename)
+            session["image_urls"].append(cloudinary_url)
+        except Exception as e:
+            print(f"[ERROR] Failed to process image from {url}: {e}")
+            send_message(sender, f"Failed to save one image. Please try sending it again.\nError: {str(e)[:200]}")
+            return
 
-    count = len(session["images"])
+    count = len(session["image_urls"])
     send_message(
         sender,
         f"Got it! {count} image{'s' if count > 1 else ''} collected so far.\n"
@@ -33,9 +36,10 @@ async def _process_images(sender: str, session: dict, media_urls: list) -> None:
 
 
 async def _process_make_ad(sender: str, session: dict) -> None:
-    images = session["images"]
+    """Trigger Modal video pipeline with collected Cloudinary image URLs."""
+    image_urls = session["image_urls"]
 
-    if not images:
+    if not image_urls:
         send_message(
             sender,
             "No images collected yet. Send a jewellery type to get a prompt, "
@@ -45,16 +49,10 @@ async def _process_make_ad(sender: str, session: dict) -> None:
 
     send_message(sender, "Creating your ad... this may take a minute!")
 
-    music_theme = session.get("music_theme")
-
-    async def music_fn(duration: float) -> str:
-        return await generate_music(duration=duration, style=music_theme)
-
     try:
-        create_ornament_clip(images, ornament_index=0)
-
-        final_path = await finalize_video(job_id="latest", generate_music_fn=music_fn)
-        public_url = await upload_to_cloudinary(final_path)
+        public_url = await process_and_upload_video(
+            image_urls=image_urls,
+        )
 
         send_video_url(
             sender,
@@ -62,13 +60,13 @@ async def _process_make_ad(sender: str, session: dict) -> None:
             caption="Your jewellery ad is ready! Save and post on Instagram.",
         )
 
-        cleanup_temp(keep=["shop_details.jpg"])
+        cleanup_temp()
 
     except Exception as e:
         print(f"[ERROR] _process_make_ad failed for {sender}:\n{str(e)}")
-        send_message(sender, f"Something went wrong while creating your ad.\nError: {str(e)}")
+        send_message(sender, f"Something went wrong while creating your ad.\nError: {str(e)[:300]}")
 
-    session["images"] = []
+    session["image_urls"] = []
 
 
 async def _process_jewellery_type(sender: str, session: dict, jewellery_type: str) -> None:
@@ -76,13 +74,10 @@ async def _process_jewellery_type(sender: str, session: dict, jewellery_type: st
         result = await generate_image_prompts(jewellery_type)
     except Exception as e:
         print(f"[ERROR] _process_jewellery_type failed for {sender}:\n{str(e)}")
-        send_message(sender, f"Could not generate a prompt right now. Please try again.\nError: {str(e)}")
+        send_message(sender, f"Could not generate a prompt right now. Please try again.\nError: {str(e)[:300]}")
         return
 
     prompts     = result["image_prompts"]
-    music_theme = result["music_theme"]
-
-    session["music_theme"] = music_theme
 
     prompts_text = "\n\n".join(
         f"Image {i + 1}:\n{p}" for i, p in enumerate(prompts)
@@ -111,7 +106,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
     # ---------- Cancel ----------
     if data["is_cancel"]:
-        session["images"] = []
+        session["image_urls"] = []
         send_message(sender, "Cleared collected images. Send a jewellery type or new images anytime.")
         return Response(status_code=200)
 

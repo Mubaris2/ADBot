@@ -1,9 +1,9 @@
 fastapi
 uvicorn
-python-dotenv
-httpx
 twilio
+httpx
 aiofiles
-python-multipart
 google-genai
-Pillow
+pillow
+python-dotenv
+modal
